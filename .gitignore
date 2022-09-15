@@ -1,0 +1,9 @@
+.DS_Store
+.vscode
+
+releases
+target
+vendor
+*.swp
+
+sc
