@@ -49,7 +49,7 @@ usage:
             [192.1.9.2]: sc -a foobar 172.1.7.2:9999 192.1.9.2:8080
             [192.2.9.1]: curl 172.1.7.2:8888
         
-        `, VERSION)
+`, VERSION)
 		flag.PrintDefaults()
 	}
 	c := flag.Bool("c", false, "client side")
