@@ -18,7 +18,7 @@ usage:
             [192.1.9.2]: sc -a foobar 172.1.7.2:9999 192.1.9.2:8080
             [192.2.9.1]: curl 172.1.7.2:8888
         
-          -a string
+  -a string
         password for authentication, required
   -c    client side
   -u    udp
