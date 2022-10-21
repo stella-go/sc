@@ -24,6 +24,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const VERSION = "v1.0.0"
@@ -126,6 +127,7 @@ func server(auth string, in string, out string, network string) {
 			}
 			if string(bts) != auth {
 				fmt.Printf("from: %s, auth not match: %s\n", conn.RemoteAddr().String(), string(bts))
+				conn.Write(authBytes("no"))
 				conn.Close()
 				continue
 			}
@@ -138,6 +140,8 @@ func server(auth string, in string, out string, network string) {
 				conn.Close()
 				continue
 			}
+			fmt.Println("connection successful.")
+
 			innerHandle(inch, outch, conn)
 		}
 	}()
@@ -179,34 +183,43 @@ func client(auth string, in string, out string, network string) {
 	outch := make(chan *Message) // client to server
 
 	go func() {
-		// server-client inner communication
-		conn, err := net.Dial(network, in)
-		if err != nil {
-			return
-		}
-		_, err = conn.Write(authBytes(auth))
-		if err != nil {
-			conn.Close()
-		}
-		bts := make([]byte, 4)
-		_, err = conn.Read(bts)
-		if err != nil {
-			conn.Close()
-			return
-		}
-		lenth := binary.BigEndian.Uint32(bts)
-		bts = make([]byte, lenth)
-		_, err = conn.Read(bts)
-		if err != nil {
-			conn.Close()
-			return
-		}
-		if string(bts) != "ok" {
-			conn.Close()
-			return
-		}
+		for {
+			// server-client inner communication
+			conn, err := net.Dial(network, in)
+			if err != nil {
+				time.Sleep(time.Second * 5)
+				continue
+			}
+			_, err = conn.Write(authBytes(auth))
+			if err != nil {
+				conn.Close()
+				time.Sleep(time.Second * 5)
+				continue
+			}
+			bts := make([]byte, 4)
+			_, err = conn.Read(bts)
+			if err != nil {
+				conn.Close()
+				time.Sleep(time.Second * 5)
+				continue
+			}
+			lenth := binary.BigEndian.Uint32(bts)
+			bts = make([]byte, lenth)
+			_, err = conn.Read(bts)
+			if err != nil {
+				conn.Close()
+				time.Sleep(time.Second * 5)
+				continue
+			}
+			if string(bts) != "ok" {
+				fmt.Printf("to: %s, auth not match: %s\n", in, auth)
+				conn.Close()
+				return
+			}
+			fmt.Println("connection successful.")
 
-		innerHandle(inch, outch, conn)
+			innerHandle(inch, outch, conn)
+		}
 	}()
 
 	clientHandle(outch, inch, network, out, m)
@@ -216,31 +229,44 @@ func client(auth string, in string, out string, network string) {
 func innerHandle(in chan *Message, out chan *Message, conn net.Conn) {
 	enc := gob.NewEncoder(conn)
 	dec := gob.NewDecoder(conn)
-
+	stop := make(chan bool, 2)
+	wait := make(chan bool, 2)
 	go func() {
 		for {
-			var message Message
-			err := dec.Decode(&message)
-			if err != nil {
-				conn.Close()
+			select {
+			case <-stop:
 				return
-			}
-			// fmt.Printf("in: %s\n", message)
-			in <- &message
-
-		}
-	}()
-	go func() {
-		for {
-			message := <-out
-			// fmt.Printf("out: %s\n", message)
-			err := enc.Encode(message)
-			if err != nil {
-				conn.Close()
-				return
+			default:
+				var message Message
+				err := dec.Decode(&message)
+				if err != nil {
+					conn.Close()
+					stop <- true
+					wait <- true
+					return
+				}
+				// fmt.Printf("in: %s\n", message)
+				in <- &message
 			}
 		}
 	}()
+	go func() {
+		for {
+			select {
+			case message := <-out:
+				err := enc.Encode(message)
+				if err != nil {
+					conn.Close()
+					stop <- true
+					wait <- true
+					return
+				}
+			case <-stop:
+				return
+			}
+		}
+	}()
+	<-wait
 }
 
 // read to in
