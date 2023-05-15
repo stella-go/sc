@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 
-// 	http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-const VERSION = "v1.0.1"
+const VERSION = "v1.0.2"
 
 func main() {
 	flag.Usage = func() {
@@ -49,10 +49,24 @@ usage:
             [172.1.7.2]: sc -a foobar 8888 9999
             [192.1.9.2]: sc -a foobar -c 172.1.7.2:9999 192.1.9.2:8080
             [192.2.9.1]: curl 172.1.7.2:8888
+
+        ---------
+
+        netwnork topology:
+            192.1.9.2 --x-> 172.1.7.2:8888
+            192.1.9.2 ----> 172.1.7.2:8080
+
+        except access:
+            192.1.9.2 ----> 172.1.7.2:8888
         
+        commands:
+            [172.1.7.2]: sc -p 8080 172.1.7.2:8888
+            [192.1.9.2]: curl 172.1.7.2:8080
+
 `, VERSION)
 		flag.PrintDefaults()
 	}
+	p := flag.Bool("p", false, "proxy mode")
 	c := flag.Bool("c", false, "client side")
 	u := flag.Bool("u", false, "udp")
 	v := flag.Bool("v", false, "version")
@@ -66,21 +80,23 @@ usage:
 		flag.Usage()
 		return
 	}
-	if *auth == "" {
-		fmt.Printf("auth is empty\n")
-		return
-	}
-
 	network := "tcp"
 	if *u {
 		network = "udp"
 	}
-	if *c {
-		client(*auth, flag.Arg(0), flag.Arg(1), network)
+	if *p {
+		proxy(flag.Arg(0), flag.Arg(1), network)
 	} else {
-		server(*auth, flag.Arg(0), flag.Arg(1), network)
+		if *auth == "" {
+			fmt.Printf("auth is empty\n")
+			return
+		}
+		if *c {
+			client(*auth, flag.Arg(0), flag.Arg(1), network)
+		} else {
+			server(*auth, flag.Arg(0), flag.Arg(1), network)
+		}
 	}
-
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
